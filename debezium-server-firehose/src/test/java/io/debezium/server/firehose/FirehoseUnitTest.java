@@ -76,7 +76,7 @@ public class FirehoseUnitTest {
         reset(spyClient);
     }
 
-    @SuppressWarnings({ "rawtypes", "unchecked" })
+    @SuppressWarnings({"rawtypes", "unchecked"})
     private static List<ChangeEvent<Object, Object>> createChangeEvents(int size, String key, String destination) {
         List<ChangeEvent<Object, Object>> changeEvents = new ArrayList<>();
         for (int i = 0; i < size; i++) {
@@ -93,7 +93,7 @@ public class FirehoseUnitTest {
         return changeEvents;
     }
 
-    @SuppressWarnings({ "unchecked" })
+    @SuppressWarnings({"unchecked"})
     private static RecordCommitter<ChangeEvent<Object, Object>> RecordCommitter() {
         RecordCommitter<ChangeEvent<Object, Object>> result = mock(RecordCommitter.class);
         return result;
@@ -117,8 +117,7 @@ public class FirehoseUnitTest {
         try {
             firehoseChangeConsumer.connect();
             firehoseChangeConsumer.handleBatch(changeEvents, RecordCommitter());
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             threwException.getAndSet(true);
         }
 
@@ -149,16 +148,14 @@ public class FirehoseUnitTest {
                                 .errorMessage("The request rate for the stream is too high").build();
 
                         failedRecordsFromFirstCall.add(records.get(i));
-                    }
-                    else {
+                    } else {
                         recordResult = PutRecordBatchResponseEntry.builder().recordId("recordId").build();
                     }
                     response.add(recordResult);
                 }
                 firstCall.getAndSet(false);
                 return PutRecordBatchResponse.builder().requestResponses(response).failedPutCount(response.size()).build();
-            }
-            else {
+            } else {
                 for (Record record : records) {
                     recordsFromSecondCall.add(record);
                     PutRecordBatchResponseEntry recordResult = PutRecordBatchResponseEntry.builder().recordId("recordId").build();
@@ -171,8 +168,7 @@ public class FirehoseUnitTest {
         try {
             firehoseChangeConsumer.connect();
             firehoseChangeConsumer.handleBatch(changeEvents, committer);
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             threwException.getAndSet(true);
         }
 
@@ -203,8 +199,7 @@ public class FirehoseUnitTest {
             for (Record record : records) {
                 if (firstBatch.get()) {
                     numRecordsBatchOne.incrementAndGet();
-                }
-                else {
+                } else {
                     numRecordsBatchTwo.incrementAndGet();
                 }
                 PutRecordBatchResponseEntry recordResult = PutRecordBatchResponseEntry.builder().recordId("recordId").build();
@@ -218,8 +213,7 @@ public class FirehoseUnitTest {
         try {
             firehoseChangeConsumer.connect();
             firehoseChangeConsumer.handleBatch(changeEvents, committer);
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             threwException.getAndSet(true);
         }
 
