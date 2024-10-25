@@ -9,6 +9,7 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -38,6 +39,7 @@ import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.firehose.FirehoseClient;
 import software.amazon.awssdk.services.firehose.FirehoseClientBuilder;
+import software.amazon.awssdk.services.firehose.model.FirehoseException;
 import software.amazon.awssdk.services.firehose.model.PutRecordBatchRequest;
 import software.amazon.awssdk.services.firehose.model.PutRecordBatchResponse;
 import software.amazon.awssdk.services.firehose.model.Record;
@@ -101,6 +103,7 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
 
         final FirehoseClientBuilder builder = FirehoseClient.builder()
                 .region(Region.of(region));
+
         endpointOverride.ifPresent(endpoint -> builder.endpointOverride(URI.create(endpoint)));
         credentialsProfile.ifPresent(profile -> builder.credentialsProvider(ProfileCredentialsProvider.create(profile)));
 
@@ -112,8 +115,7 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
     void close() {
         try {
             client.close();
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             LOGGER.warn("Exception while closing FireHose client: {}", e);
         }
     }
@@ -129,8 +131,7 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
 
         if (records.size() < MAX_BATCH_SIZE) {
             buildAndSendRecords(records);
-        }
-        else {
+        } else {
             int size = records.size();
             int i = 0;
             while (i < size) {
@@ -146,12 +147,12 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
 
     private void buildAndSendRecords(List<ChangeEvent<Object, Object>> records) throws InterruptedException {
         List<Record> firehoseRecords = records.stream()
-                .map(
+                .filter(t -> Objects.nonNull(t)).map(
                         t -> Record.builder()
                                 .data(toSdkBytes(t))
                                 .build())
                 .collect(Collectors.toList());
-        sendData(firehoseRecords, 1);
+        sendData(firehoseRecords);
     }
 
     private SdkBytes toSdkBytes(ChangeEvent<Object, Object> event) {
@@ -162,34 +163,49 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
         return SdkBytes.fromByteArray(modifiedBytes);
     }
 
-    private void sendData(List<Record> originalRecords, Integer attempts) throws InterruptedException {
-        PutRecordBatchRequest batchRecord = PutRecordBatchRequest.builder()
-                .deliveryStreamName(streamName)
-                .records(originalRecords)
-                .build();
+    private void sendData(List<Record> originalRecords) throws InterruptedException {
+        int attempts = 1;
+        List<Record> recordsToSend = originalRecords;
 
-        PutRecordBatchResponse response = client.putRecordBatch(batchRecord);
+        while (attempts <= maxRetries) {
 
-        if (response.failedPutCount() > 0) {
-            List<Record> retryableRecords = new ArrayList<>();
+            PutRecordBatchRequest batchRecord = PutRecordBatchRequest.builder()
+                    .deliveryStreamName(streamName)
+                    .records(recordsToSend)
+                    .build();
 
-            for (int i = 0; i < response.requestResponses().size(); i++) {
-                if (response.requestResponses().get(i).errorCode() != null && !response.requestResponses().get(i).errorCode().isEmpty()) {
-                    retryableRecords.add(originalRecords.get(i));
-                }
+            PutRecordBatchResponse response;
+
+            try {
+                response = client.putRecordBatch(batchRecord);
+
+            } catch (FirehoseException ex) {
+                LOGGER.error("{} records have not been ingested", ex);
+                throw new DebeziumException("Failed to ingest records on firehose", ex);
             }
 
-            if (attempts < maxRetries) {
+            if (response.failedPutCount() > 0) {
+                List<Record> retryableRecords = new ArrayList<>();
+
+                for (int i = 0; i < response.requestResponses().size(); i++) {
+                    if (response.requestResponses().get(i).errorCode() != null && !response.requestResponses().get(i).errorCode().isEmpty()) {
+                        retryableRecords.add(recordsToSend.get(i));
+                    }
+                }
                 double backoff = Math.min(Math.pow(baseDelay, attempts), maxDelay);
                 LOGGER.warn("Attempt number {} to retry failed processed events", attempts);
                 Metronome.sleeper(Duration.ofSeconds((long) backoff), Clock.SYSTEM).pause();
-                sendData(retryableRecords, attempts + 1); // Recursive retry
-            }
-            else {
-                double recordsLost = retryableRecords.size();
-                LOGGER.error("{} records have not been ingested", recordsLost);
-                throw new DebeziumException("Exceeded maximum number of attempts to publish event");
+                recordsToSend = retryableRecords;
+                attempts++;
+
+            } else {
+                return;
             }
         }
+
+        double recordsLost = recordsToSend.size();
+        LOGGER.error("{} records have not been ingested", recordsLost);
+        throw new DebeziumException("Exceeded maximum number of attempts to publish event");
+
     }
 }
