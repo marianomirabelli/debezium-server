@@ -115,7 +115,8 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
     void close() {
         try {
             client.close();
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             LOGGER.warn("Exception while closing FireHose client: {}", e);
         }
     }
@@ -131,7 +132,8 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
 
         if (records.size() < MAX_BATCH_SIZE) {
             buildAndSendRecords(records);
-        } else {
+        }
+        else {
             int size = records.size();
             int i = 0;
             while (i < size) {
@@ -179,7 +181,8 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
             try {
                 response = client.putRecordBatch(batchRecord);
 
-            } catch (FirehoseException ex) {
+            }
+            catch (FirehoseException ex) {
                 LOGGER.error("{} records have not been ingested", ex);
                 throw new DebeziumException("Failed to ingest records on firehose", ex);
             }
@@ -198,7 +201,8 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
                 recordsToSend = retryableRecords;
                 attempts++;
 
-            } else {
+            }
+            else {
                 return;
             }
         }
