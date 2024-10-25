@@ -47,7 +47,8 @@ public class FirehoseResourceLifecycleManager implements QuarkusTestResourceLife
     public Map<String, String> start() {
         try {
             init();
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             throw new RuntimeException("Failed to start LocalStack container", e);
         }
 
@@ -112,7 +113,8 @@ public class FirehoseResourceLifecycleManager implements QuarkusTestResourceLife
             if (localStackContainer != null && localStackContainer.isRunning()) {
                 localStackContainer.stop();
             }
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             System.err.println("Failed to stop LocalStack container: " + e.getMessage());
         }
     }
