@@ -101,6 +101,10 @@
                 </dependency>
                 <dependency>
                     <groupId>io.debezium</groupId>
+                    <artifactId>debezium-server-firehose</artifactId>
+                </dependency>
+                <dependency>
+                    <groupId>io.debezium</groupId>
                     <artifactId>debezium-server-sqs</artifactId>
                 </dependency>
                 <dependency>
