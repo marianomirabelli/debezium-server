@@ -9,7 +9,6 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -22,6 +21,7 @@ import jakarta.inject.Named;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,6 +66,8 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
 
     private static final int MAX_BATCH_SIZE = 500;
 
+    private static final byte LF = 10; // Line Feed
+
     private String region;
     private Optional<String> endpointOverride;
     private Optional<String> credentialsProfile;
@@ -76,6 +78,9 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
     private Integer maxRetries;
 
     private String streamName;
+
+    @ConfigProperty(name = PROP_PREFIX + "null.key", defaultValue = "default")
+    String nullKey;
 
     private FirehoseClient client = null;
 
@@ -149,7 +154,7 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
 
     private void buildAndSendRecords(List<ChangeEvent<Object, Object>> records) throws InterruptedException {
         List<Record> firehoseRecords = records.stream()
-                .filter(t -> Objects.nonNull(t)).map(
+                .map(
                         t -> Record.builder()
                                 .data(toSdkBytes(t))
                                 .build())
@@ -158,10 +163,11 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
     }
 
     private SdkBytes toSdkBytes(ChangeEvent<Object, Object> event) {
-        byte[] originalBytes = getBytes(event.value());
+        Object eventValue = Optional.ofNullable(event.value()).orElse("");
+        byte[] originalBytes = getBytes(eventValue);
         byte[] modifiedBytes = new byte[originalBytes.length + 1];
         System.arraycopy(originalBytes, 0, modifiedBytes, 0, originalBytes.length);
-        modifiedBytes[modifiedBytes.length - 1] = 10; // Adding a LF byte because firehose requires it to understand registries as independent entries
+        modifiedBytes[modifiedBytes.length - 1] = LF; // This adds an LF byte because Firehose requires it to save events as separated entries.
         return SdkBytes.fromByteArray(modifiedBytes);
     }
 
