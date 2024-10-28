@@ -95,16 +95,15 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
         baseDelay = config.getOptionalValue(PROP_RETRIES_BASE_DELAY, Integer.class).orElse(DEFAULT_RETRY_BASE_DELAY);
         maxDelay = config.getOptionalValue(PROP_RETRIES_MAX_DELAY, Integer.class).orElse(DEFAULT_RETRY_MAX_DELAY);
         streamName = config.getOptionalValue(PROP_STREAM_NAME, String.class).orElse(DEFAULT_STREAM_NAME);
+        region = config.getValue(PROP_REGION_NAME, String.class);
+        endpointOverride = config.getOptionalValue(PROP_ENDPOINT_NAME, String.class);
+        credentialsProfile = config.getOptionalValue(PROP_CREDENTIALS_PROFILE, String.class);
 
         if (customClient.isResolvable()) {
             client = customClient.get();
             LOGGER.info("Obtained custom configured FirehoseClient '{}'", client);
             return;
         }
-
-        region = config.getValue(PROP_REGION_NAME, String.class);
-        endpointOverride = config.getOptionalValue(PROP_ENDPOINT_NAME, String.class);
-        credentialsProfile = config.getOptionalValue(PROP_CREDENTIALS_PROFILE, String.class);
 
         final FirehoseClientBuilder builder = FirehoseClient.builder()
                 .region(Region.of(region));
