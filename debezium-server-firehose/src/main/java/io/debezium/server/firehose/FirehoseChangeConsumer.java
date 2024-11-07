@@ -55,6 +55,7 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
     private static final String PROP_ENDPOINT_NAME = PROP_PREFIX + "endpoint";
     private static final String PROP_CREDENTIALS_PROFILE = PROP_PREFIX + "credentials.profile";
     private static final String PROP_STREAM_NAME = PROP_PREFIX + "stream.name";
+    private static final String PROP_BATCH_SIZE = PROP_PREFIX + "batch.size";
     private static final String PROP_RETRIES_MAX_ATTEMPTS = PROP_PREFIX + "retries.max.attempts";
     private static final String PROP_RETRIES_BASE_DELAY = PROP_PREFIX + "retries.base.delay";
     private static final String PROP_RETRIES_MAX_DELAY = PROP_PREFIX + "retries.max.delay";
@@ -62,6 +63,7 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
     private static final int DEFAULT_RETRY_COUNT = 5;
     private static final int DEFAULT_RETRY_BASE_DELAY = 2;
     private static final int DEFAULT_RETRY_MAX_DELAY = 20;
+    private static final int DEFAULT_BATCH_SIZE = 500;
     private static final String DEFAULT_STREAM_NAME = "data-stream";
 
     private static final int MAX_BATCH_SIZE = 500;
@@ -74,6 +76,7 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
 
     private Integer baseDelay;
     private Integer maxDelay;
+    private Integer batchSize;
 
     private Integer maxRetries;
 
@@ -95,9 +98,17 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
         baseDelay = config.getOptionalValue(PROP_RETRIES_BASE_DELAY, Integer.class).orElse(DEFAULT_RETRY_BASE_DELAY);
         maxDelay = config.getOptionalValue(PROP_RETRIES_MAX_DELAY, Integer.class).orElse(DEFAULT_RETRY_MAX_DELAY);
         streamName = config.getOptionalValue(PROP_STREAM_NAME, String.class).orElse(DEFAULT_STREAM_NAME);
+        batchSize = config.getOptionalValue(PROP_BATCH_SIZE, Integer.class).orElse(DEFAULT_BATCH_SIZE);
         region = config.getValue(PROP_REGION_NAME, String.class);
         endpointOverride = config.getOptionalValue(PROP_ENDPOINT_NAME, String.class);
         credentialsProfile = config.getOptionalValue(PROP_CREDENTIALS_PROFILE, String.class);
+
+        if (batchSize <= 0) {
+            throw new DebeziumException("Batch size must be greater than 0");
+        }
+        else if (batchSize > MAX_BATCH_SIZE) {
+            throw new DebeziumException("Batch size must be less than or equal to MAX_BATCH_SIZE");
+        }
 
         if (customClient.isResolvable()) {
             client = customClient.get();
@@ -134,15 +145,15 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
             return;
         }
 
-        if (records.size() < MAX_BATCH_SIZE) {
+        if (records.size() < batchSize) {
             buildAndSendRecords(records);
         }
         else {
             int size = records.size();
             int i = 0;
             while (i < size) {
-                int lastIndex = Math.min(i + MAX_BATCH_SIZE, size);
-                buildAndSendRecords(records.subList(i, lastIndex)); // lastIndex is exclusive
+                int lastIndex = Math.min(i + batchSize, size);
+                buildAndSendRecords(records.subList(i, lastIndex)); // lastIndex is non-inclusive
                 i = lastIndex;
             }
         }
