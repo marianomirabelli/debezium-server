@@ -8,7 +8,9 @@ package io.debezium.server.firehose;
 import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -24,6 +26,11 @@ import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import io.debezium.DebeziumException;
 import io.debezium.engine.ChangeEvent;
@@ -82,6 +89,12 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
 
     private String streamName;
 
+    private ObjectMapper mapper = null;
+
+    @Inject
+    @CustomConsumerBuilder
+    Instance<ObjectMapper> customMapper;
+
     @ConfigProperty(name = PROP_PREFIX + "null.key", defaultValue = "default")
     String nullKey;
 
@@ -102,6 +115,10 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
         region = config.getValue(PROP_REGION_NAME, String.class);
         endpointOverride = config.getOptionalValue(PROP_ENDPOINT_NAME, String.class);
         credentialsProfile = config.getOptionalValue(PROP_CREDENTIALS_PROFILE, String.class);
+
+        mapper = new ObjectMapper();
+        mapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
+        mapper.registerModule(new JavaTimeModule());
 
         if (batchSize <= 0) {
             throw new DebeziumException("Batch size must be greater than 0");
@@ -173,12 +190,26 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
     }
 
     private SdkBytes toSdkBytes(ChangeEvent<Object, Object> event) {
-        Object eventValue = Optional.ofNullable(event.value()).orElse("");
-        byte[] originalBytes = getBytes(eventValue);
+        byte[] originalBytes = getBytes(toJson(event));
         byte[] modifiedBytes = new byte[originalBytes.length + 1];
         System.arraycopy(originalBytes, 0, modifiedBytes, 0, originalBytes.length);
         modifiedBytes[modifiedBytes.length - 1] = LF; // This adds an LF byte because Firehose requires it to save events as separated entries.
         return SdkBytes.fromByteArray(modifiedBytes);
+    }
+
+    private String toJson(ChangeEvent<Object, Object> event) {
+        Map<String, Object> record = new HashMap<>();
+        String key = Optional.ofNullable(getString(event.key())).orElse(nullKey);
+        Object eventValue = Optional.ofNullable(event.value()).orElse("");
+        record.put("key", key);
+        record.put("data", eventValue);
+        try {
+            return mapper.writeValueAsString(record);
+        }
+        catch (JsonProcessingException e) {
+            LOGGER.error("Failed to serialize sink registry to send by firehose", e);
+            throw new DebeziumException("Failed to serialize sink registry to send by firehose");
+        }
     }
 
     private void sendData(List<Record> originalRecords) throws InterruptedException {
