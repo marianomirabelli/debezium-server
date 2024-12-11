@@ -163,14 +163,14 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
         }
 
         if (records.size() < batchSize) {
-            buildAndSendRecords(records);
+            buildAndSendRecords(records, committer);
         }
         else {
             int size = records.size();
             int i = 0;
             while (i < size) {
                 int lastIndex = Math.min(i + batchSize, size);
-                buildAndSendRecords(records.subList(i, lastIndex)); // lastIndex is non-inclusive
+                buildAndSendRecords(records.subList(i, lastIndex), committer); // lastIndex is non-inclusive
                 i = lastIndex;
             }
         }
@@ -179,7 +179,7 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
 
     }
 
-    private void buildAndSendRecords(List<ChangeEvent<Object, Object>> records) throws InterruptedException {
+    private void buildAndSendRecords(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer) throws InterruptedException {
         List<Record> firehoseRecords = records.stream()
                 .map(
                         t -> Record.builder()
@@ -187,6 +187,10 @@ public class FirehoseChangeConsumer extends BaseChangeConsumer implements Debezi
                                 .build())
                 .collect(Collectors.toList());
         sendData(firehoseRecords);
+
+        for (ChangeEvent<Object, Object> record : records) {
+            committer.markProcessed(record);
+        }
     }
 
     private SdkBytes toSdkBytes(ChangeEvent<Object, Object> event) {
