@@ -14,7 +14,7 @@
 
     <properties>
         <skipITs>true</skipITs>
-        <version.s3>2.29.2</version.s3>
+        <aws.sdk.version>2.29.2</aws.sdk.version>
     </properties>
 
     <dependencies>
@@ -24,6 +24,13 @@
         </dependency>
 
         <!-- Target systems -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>sts</artifactId>
+            <version>${aws.sdk.version}</version>
+            <scope>compile</scope>
+        </dependency>
+
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>firehose</artifactId>
@@ -80,7 +87,7 @@
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>s3</artifactId>
-            <version>${version.s3}</version>
+            <version>${aws.sdk.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
